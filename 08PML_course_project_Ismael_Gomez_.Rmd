@@ -1,0 +1,74 @@
+---
+title: "Course Proyect - Practical Machine Learning"
+author: "Ismael Gómez"
+date: "24 de diciembre de 2017"
+output: html_document
+---
+
+### Introduction
+
+It's the document which to brief the analysis carried out for the Practical machine learning course project. This was done with data from Project [**"Human activity recognition"**](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har), which allows that people both quantify how much of a particular activity they do and quantify how well they do it, recording data about personal activity relatively inexpensively, from devides like  accelerometers on the belt, forearm, arm, and dumbell; in this case of 6 participants. More information is available from the website [**here**](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har).
+
+
+```{r setup, include=FALSE, warning=F, cache=T}
+data <- read.csv('pml-training.csv', header=T, stringsAsFactors=F)
+test <- read.csv('pml-testing.csv', header=T, stringsAsFactors=F)
+
+na_var <- as.data.frame(which(colSums(is.na(test)) > 0, arr.ind =T), stringsAsFactors=F)
+colnames(na_var)[1] <- 'na_var'
+data2 <- data[, -c(na_var$na_var)]
+test <- test[, -c(na_var$na_var)]
+```
+
+### First step
+
+Due the goal of the project is to predict the "classe" variable in the training set, i first a loaded the "training" and "test" data and confirm that the "test" data only has 20 instances for the final Quiz (without the "classe" variable). Also i found there are a lot of variables (`r nrow(na_var)`) with only NA values on test data. So, due after fitting a classification model we need to predict the classes for this test data, i decided not consider this variables (only NA values): 
+
+`r row.names(na_var)`
+
+For the following analysis i only considered the numeric variables from 8th column forward (8 -> 59). This way now we have a dataset with `r dim(data2)[1]` rows (instances) and `r dim(data2)[2]` columns.
+
+Finally, i did some base plots with specific variables and classe variable mapped by color, but i couldn't see a guess about main features or some correlation. I couldn't use the function "pairs" with all variable at the same time because we have a huge amount of data. Also i plotted a heatmap with all numeric data scaled, in order to see "natural"" clusters in data:
+
+```{r heatmap}
+data.scaled <- scale(data2[, 8:59])
+data_matrix <- as.matrix(data.scaled)
+heatmap(data_matrix, Colv=T, scale='none')
+```
+
+## Fitting the model
+
+After loading caret package, i created a data partition with 80% for training dataset and 20% for pretesting dataset. Then a set the seed i tried to fit some models with default configuration:
+
+1) 'rpart' with training dataset Accuracy of 51%
+2) 'lda' with training dataset Accuracy of 70%
+
+I tried with other method but their respective training process late a lot. So after that i play a little time with PCA and Standarization preprocessing, but i couldn't better fit than before for the same methods.
+
+Also i fit some models with Cross Validation train control (k=10), improving the Accuracy for some models.
+
+After that, trying to improve the accuracy, i fitted a model with the method **treebag** and its default configuration (with cross validation 10 fold), which consider a Bagging process for training. It had an Accuracy of 98.6%  for training dataset and 98.3% for the pretesting dataset (also had a 100% of accuracy for 20 testing cases of Quiz).
+
+
+```{r first, include=T, warning=F, cache=T, message=F}
+library(caret)
+set.seed(2017)
+inTrain = createDataPartition(data2$classe, p = 8/10)[[1]]
+training = data2[ inTrain,]
+testing = data2[-inTrain,]
+
+set.seed(2017)
+modelFit6 <- train(factor(classe) ~ ., method="treebag", data=training[, 8:60],
+                   trControl = trainControl(method='cv'))
+modelFit6
+
+set.seed(2017)
+predictions <- predict(modelFit6, newdata=testing)
+cm <- confusionMatrix(predictions, factor(testing$classe))
+cm 
+plot(cm$table, main='Matrix Confusion for testing data')
+```
+
+
+
+
